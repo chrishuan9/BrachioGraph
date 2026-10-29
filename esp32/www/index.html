@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BrachioGraph</title>
+<style>
+  :root {
+    --paper: #f6f4ee; --card: #fffdf8; --ink: #1d2433; --muted: #6b7180; --line: #e2ded3;
+    --accent: #2747d4; --accent-soft: #e6eafb; --danger: #c2372b; --ok: #2e7d4f;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #15171c; --card: #1d2027; --ink: #e8e6e0; --muted: #969aa5; --line: #2e323b;
+      --accent: #7f95ff; --accent-soft: #252c47; --danger: #ff7a6b; --ok: #6fcf97; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; letter-spacing: .02em; }
+  header h1 span { color: var(--muted); font-weight: 400; }
+  .chip { font: 12px var(--mono); padding: 3px 9px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+  .chip.busy { background: var(--accent); color: #fff; }
+  .chip.off { background: var(--line); color: var(--muted); }
+  .chip.err { background: var(--danger); color: #fff; }
+  .where { margin-left: auto; font: 12px var(--mono); color: var(--muted); }
+  main { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; padding: 18px 20px 40px; max-width: 1280px; margin: 0 auto; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; padding: 14px 16px 32px; } }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  section + section { margin-top: 18px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+  .drop { border: 1.5px dashed var(--line); border-radius: 10px; padding: 18px; text-align: center; cursor: pointer; color: var(--muted); }
+  .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { color: var(--ink); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
+  label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+  input[type=number], input[type=text] { font: 14px var(--mono); padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); color: var(--ink); width: 100%; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-top: 12px; }
+  .seg button { border: 0; border-radius: 0; background: transparent; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  button { font: inherit; font-size: 14px; padding: 7px 13px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.stop { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+  button.small { font-size: 12px; padding: 4px 9px; }
+  .canvas-wrap { position: relative; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; aspect-ratio: 4 / 3; overflow: hidden; }
+  canvas { width: 100%; height: 100%; display: block; }
+  .canvas-wrap .empty { position: absolute; inset: 0; display: grid; place-items: center; color: #9a9a9a; font-size: 14px; }
+  .stats { font: 12px var(--mono); color: var(--muted); margin-top: 8px; min-height: 1.4em; }
+  .msg { font-size: 13px; margin-top: 8px; min-height: 1.3em; }
+  .msg.err { color: var(--danger); } .msg.ok { color: var(--ok); }
+  .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 6px 0 4px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .4s; }
+  .kv { font: 12px var(--mono); color: var(--muted); display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin-top: 10px; }
+  .kv b { color: var(--ink); font-weight: 500; }
+  ul.files { list-style: none; margin: 0; padding: 0; }
+  ul.files li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  ul.files li:last-child { border-bottom: 0; }
+  ul.files .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 13px var(--mono); }
+  ul.files .size { font: 12px var(--mono); color: var(--muted); }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .toggle { font-size: 12px; color: var(--muted); display: inline-flex; flex-direction: row; gap: 6px; align-items: center; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>BrachioGraph <span>· ESP32</span></h1>
+  <span id="chip" class="chip off">connecting…</span>
+  <span class="where" id="where"></span>
+</header>
+
+<main>
+  <div>
+    <section>
+      <h2>New drawing</h2>
+      <div class="drop" id="drop">
+        <strong>Drop an image here</strong> or click to choose<br>
+        <small>JPG · PNG · GIF · WebP · SVG · linedraw .json · .lines</small>
+        <input type="file" id="file" accept="image/*,.svg,.json,.lines,.txt" hidden>
+      </div>
+
+      <div id="svgMode" class="seg hidden">
+        <button data-mode="vector" class="on">Trace SVG paths</button>
+        <button data-mode="raster">Linedraw (contours + hatching)</button>
+      </div>
+
+      <div id="rasterOpts" class="grid hidden">
+        <label>Resolution (px)<input type="number" id="o_resolution" value="1024" min="128" max="4096" step="64"></label>
+        <label>Contours (draw_contours, 0 = off)<input type="number" id="o_contours" value="2" min="0" max="16" step="1"></label>
+        <label>Repeat contours<input type="number" id="o_rcontours" value="1" min="0" max="5"></label>
+        <label>Hatch spacing (draw_hatch, 0 = off)<input type="number" id="o_hatch" value="16" min="0" max="64" step="1"></label>
+        <label>Repeat hatch<input type="number" id="o_rhatch" value="1" min="0" max="5"></label>
+      </div>
+      <div id="vectorOpts" class="grid hidden">
+        <label>Samples per shape<input type="number" id="o_samples" value="1500" min="50" max="20000" step="50"></label>
+        <label>Simplify tolerance<input type="number" id="o_tol" value="0.25" min="0" max="10" step="0.05"></label>
+      </div>
+
+      <div class="canvas-wrap">
+        <canvas id="preview"></canvas>
+        <div class="empty" id="empty">Preview appears here</div>
+      </div>
+      <div class="row" style="justify-content: space-between; margin-top: 6px">
+        <div class="stats" id="stats"></div>
+        <span class="toggle"><input type="checkbox" id="showTravel"> <label for="showTravel" style="display:inline">show pen travel</label></span>
+      </div>
+
+      <div class="row" style="margin-top: 10px">
+        <input type="text" id="name" placeholder="drawing name" style="flex: 1; min-width: 160px">
+        <button id="save" disabled>Save to plotter</button>
+        <button id="saveplot" class="primary" disabled>Save &amp; plot</button>
+      </div>
+      <div class="msg" id="msg"></div>
+    </section>
+  </div>
+
+  <div>
+    <section>
+      <h2>Plotter</h2>
+      <div class="row" style="justify-content: space-between">
+        <div id="job" style="font-weight: 600">Idle</div>
+        <button class="stop" id="stop" disabled>Stop</button>
+      </div>
+      <div class="bar"><div id="bar"></div></div>
+      <div class="stats" id="progress"></div>
+      <div class="row" style="margin-top: 10px">
+        <button data-act="park">Park</button>
+        <button data-act="pen?state=up">Pen up</button>
+        <button data-act="pen?state=down">Pen down</button>
+        <button data-act="box">Box</button>
+        <button data-act="test_pattern">Test pattern</button>
+        <button data-act="quiet" title="Stop sending pulses so the servos go limp">Release servos</button>
+      </div>
+      <div class="grid">
+        <label>Wait per step (s)<input type="number" id="p_wait" step="0.005" min="0" placeholder="0.01"></label>
+        <label>Resolution (cm)<input type="number" id="p_res" step="0.05" min="0.01" placeholder="0.1"></label>
+        <label>Angular step (°)<input type="number" id="p_step" step="0.05" min="0.01" placeholder="0.1"></label>
+      </div>
+      <div class="kv" id="kv"></div>
+      <div class="msg" id="pmsg"></div>
+    </section>
+
+    <section>
+      <h2>Drawings on the plotter</h2>
+      <ul class="files" id="files"><li class="hint">Loading…</li></ul>
+      <div class="hint" id="fs"></div>
+    </section>
+  </div>
+</main>
+
+<script src="linedraw.js"></script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const L = window.Linedraw;
+
+let source = null;      // {kind: 'raster'|'svg'|'lines', gray?, svgText?, name}
+let svgMode = "vector";
+let lines = null;       // current drawing, image co-ordinates (y down)
+let status = null;
+
+// ------------------------------------------------------------- helpers
+const fmtBytes = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : n > 1024 ? (n / 1024).toFixed(1) + " kB" : n + " B";
+function say(el, text, cls) { el.textContent = text || ""; el.className = "msg" + (cls ? " " + cls : ""); }
+const tick = () => new Promise((r) => setTimeout(r, 30));
+
+async function api(path, opts) {
+  const r = await fetch("/api/" + path, Object.assign({ method: "POST" }, opts || {}));
+  let body = {};
+  try { body = await r.json(); } catch (e) {}
+  if (!r.ok || body.error) throw new Error(body.error || r.statusText);
+  return body;
+}
+
+// ------------------------------------------------------------- loading input
+const drop = $("drop");
+drop.onclick = () => $("file").click();
+$("file").onchange = (e) => e.target.files[0] && loadFile(e.target.files[0]);
+drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); e.dataTransfer.files[0] && loadFile(e.dataTransfer.files[0]); };
+
+async function loadFile(file) {
+  const ext = file.name.split(".").pop().toLowerCase();
+  const base = file.name.replace(/\.[^.]+$/, "");
+  $("name").value = base.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  say($("msg"), "");
+  try {
+    if (ext === "json") {
+      source = { kind: "lines", name: base };
+      setLines(JSON.parse(await file.text()).map((l) => l.map((p) => [p[0], p[1]])));
+    } else if (ext === "lines" || ext === "txt") {
+      source = { kind: "lines", name: base };
+      setLines(L.parseLinesText(await file.text()));
+    } else if (ext === "svg" || file.type === "image/svg+xml") {
+      source = { kind: "svg", svgText: await file.text(), name: base };
+    } else {
+      source = { kind: "raster", gray: await rasterToGray(file), name: base };
+    }
+    updateOptionPanels();
+    if (source.kind !== "lines") await convert();
+  } catch (e) {
+    console.error(e);
+    say($("msg"), "Could not read " + file.name + ": " + e.message, "err");
+  }
+}
+
+function loadImage(url) {
+  return new Promise((ok, fail) => {
+    const img = new Image();
+    img.onload = () => ok(img);
+    img.onerror = () => fail(new Error("the browser could not decode this image"));
+    img.src = url;
+  });
+}
+
+async function rasterToGray(blob, forceWidth) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await loadImage(url);
+    let w = img.naturalWidth || forceWidth || 1024, h = img.naturalHeight || w;
+    const cap = 3000 / Math.max(w, h);   // keep very large photos manageable
+    if (cap < 1) { w = Math.round(w * cap); h = Math.round(h * cap); }
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    return L.rgbaToGray(ctx.getImageData(0, 0, w, h).data, w, h);
+  } finally { URL.revokeObjectURL(url); }
+}
+
+function parseSvg(text) {
+  const doc = new DOMParser().parseFromString(text, "image/svg+xml");
+  const svg = doc.querySelector("svg");
+  if (!svg || doc.querySelector("parsererror")) throw new Error("not a valid SVG file");
+  // never run anything embedded in the file
+  doc.querySelectorAll("script, foreignObject").forEach((n) => n.remove());
+  doc.querySelectorAll("*").forEach((n) => {
+    for (const a of Array.from(n.attributes)) if (/^on/i.test(a.name)) n.removeAttribute(a.name);
+  });
+  // make sure it has a size (needed for rasterising)
+  const vb = svg.viewBox && svg.viewBox.baseVal;
+  const hasSize = svg.getAttribute("width") && svg.getAttribute("height") && !/%$/.test(svg.getAttribute("width"));
+  if (!hasSize) {
+    const vw = vb && vb.width ? vb.width : 1024, vh = vb && vb.height ? vb.height : 1024;
+    svg.setAttribute("width", 1024);
+    svg.setAttribute("height", Math.round(1024 * vh / vw));
+  }
+  return svg;
+}
+
+function updateOptionPanels() {
+  const k = source && source.kind;
+  $("svgMode").classList.toggle("hidden", k !== "svg");
+  const raster = k === "raster" || (k === "svg" && svgMode === "raster");
+  $("rasterOpts").classList.toggle("hidden", !raster);
+  $("vectorOpts").classList.toggle("hidden", !(k === "svg" && svgMode === "vector"));
+}
+
+document.querySelectorAll("#svgMode button").forEach((b) => b.onclick = () => {
+  svgMode = b.dataset.mode;
+  document.querySelectorAll("#svgMode button").forEach((x) => x.classList.toggle("on", x === b));
+  updateOptionPanels();
+  convert();
+});
+document.querySelectorAll("#rasterOpts input, #vectorOpts input").forEach((i) => i.onchange = () => convert());
+
+// ------------------------------------------------------------- conversion
+async function convert() {
+  if (!source || source.kind === "lines") return;
+  const t0 = performance.now();
+  say($("msg"), "Converting…");
+  await tick();
+  try {
+    let result;
+    if (source.kind === "svg" && svgMode === "vector") {
+      const holder = document.createElement("div");
+      holder.style.cssText = "position:absolute;left:-99999px;top:0;width:1024px;height:1024px;overflow:hidden";
+      document.body.appendChild(holder);
+      try {
+        const svg = document.importNode(parseSvg(source.svgText), true);
+        holder.appendChild(svg);
+        result = L.traceSvgElement(svg, { samples: +$("o_samples").value || 1500, tolerance: +$("o_tol").value });
+      } finally { holder.remove(); }
+      if (!result.length) throw new Error("no drawable shapes found - try Linedraw mode");
+    } else {
+      let gray = source.gray;
+      if (source.kind === "svg") {
+        const svg = parseSvg(source.svgText);
+        const blob = new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml" });
+        gray = source.gray = await rasterToGray(blob, 1024);
+      }
+      result = L.vectorise(gray, {
+        resolution: +$("o_resolution").value || 1024,
+        draw_contours: +$("o_contours").value,
+        repeat_contours: +$("o_rcontours").value,
+        draw_hatch: +$("o_hatch").value,
+        repeat_hatch: +$("o_rhatch").value,
+      });
+      if (!result.length) throw new Error("no lines produced - try different settings");
+    }
+    setLines(result);
+    say($("msg"), "Converted in " + Math.round(performance.now() - t0) + " ms", "ok");
+  } catch (e) {
+    console.error(e);
+    say($("msg"), e.message, "err");
+  }
+}
+
+// ------------------------------------------------------------- preview
+function setLines(l) {
+  lines = l.filter((x) => x.length > 0);
+  $("save").disabled = $("saveplot").disabled = !lines.length;
+  draw();
+}
+
+function draw() {
+  const canvas = $("preview");
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  $("empty").classList.toggle("hidden", !!(lines && lines.length));
+  if (!lines || !lines.length) { $("stats").textContent = ""; return; }
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const l of lines) for (const [x, y] of l) {
+    if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+  }
+  const pad = 16, bw = maxX - minX || 1, bh = maxY - minY || 1;
+  const s = Math.min((W - 2 * pad) / bw, (H - 2 * pad) / bh);
+  const ox = (W - bw * s) / 2 - minX * s, oy = (H - bh * s) / 2 - minY * s;
+  const P = (p) => [p[0] * s + ox, p[1] * s + oy];
+
+  if ($("showTravel").checked) {
+    ctx.strokeStyle = "rgba(220,60,40,.35)"; ctx.setLineDash([3, 3]); ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    for (let i = 1; i < lines.length; i++) {
+      const a = P(lines[i - 1][lines[i - 1].length - 1]), b = P(lines[i][0]);
+      ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.strokeStyle = "#1d2a6b"; ctx.lineWidth = 1; ctx.lineJoin = ctx.lineCap = "round";
+  ctx.beginPath();
+  for (const l of lines) {
+    const a = P(l[0]); ctx.moveTo(a[0], a[1]);
+    if (l.length === 1) ctx.lineTo(a[0] + 0.5, a[1]);
+    for (let i = 1; i < l.length; i++) { const b = P(l[i]); ctx.lineTo(b[0], b[1]); }
+  }
+  ctx.stroke();
+
+  const st = L.stats(lines);
+  let note = "";
+  if (status && status.bounds) {
+    const [l, b, r, t] = status.bounds;
+    const imgLandscape = bw >= bh, boxLandscape = (r - l) >= (t - b);
+    if (imgLandscape !== boxLandscape && bw !== bh) note = " · will be rotated 90° to fit";
+  }
+  $("stats").textContent = st.lines + " lines · " + st.segments + " segments · " +
+    Math.round(st.travel / (st.drawn + st.travel || 1) * 100) + "% pen travel" + note;
+}
+$("showTravel").onchange = draw;
+window.addEventListener("resize", draw);
+
+// ------------------------------------------------------------- saving / plotting
+async function save(andPlot) {
+  if (!lines || !lines.length) return;
+  let name = ($("name").value || "drawing").trim();
+  name = name.replace(/\.(lines|json|txt)$/i, "") + ".lines";  // the upload is always .lines text
+  const text = L.toLinesText(lines);
+  say($("msg"), "Uploading " + fmtBytes(text.length) + "…");
+  try {
+    const r = await api("upload?name=" + encodeURIComponent(name), { body: text, headers: { "Content-Type": "text/plain" } });
+    say($("msg"), "Saved as " + r.name + " (" + fmtBytes(r.size) + ")", "ok");
+    await refreshFiles();
+    if (andPlot) await plot(r.name);
+  } catch (e) { say($("msg"), "Upload failed: " + e.message, "err"); }
+}
+$("save").onclick = () => save(false);
+$("saveplot").onclick = () => save(true);
+
+function plotParams() {
+  const q = [];
+  if ($("p_wait").value !== "") q.push("wait=" + +$("p_wait").value);
+  if ($("p_res").value !== "") q.push("resolution=" + +$("p_res").value);
+  if ($("p_step").value !== "") q.push("angular_step=" + +$("p_step").value);
+  return q.length ? "&" + q.join("&") : "";
+}
+
+async function plot(name) {
+  try {
+    await api("plot?name=" + encodeURIComponent(name) + plotParams());
+    say($("pmsg"), "");
+    poll();
+  } catch (e) { say($("pmsg"), e.message, "err"); }
+}
+
+$("stop").onclick = async () => { try { await api("stop"); } catch (e) { say($("pmsg"), e.message, "err"); } };
+document.querySelectorAll("[data-act]").forEach((b) => b.onclick = async () => {
+  try { await api(b.dataset.act); say($("pmsg"), ""); poll(); } catch (e) { say($("pmsg"), e.message, "err"); }
+});
+
+// ------------------------------------------------------------- stored files
+async function refreshFiles() {
+  const ul = $("files");
+  try {
+    const r = await fetch("/api/files").then((x) => x.json());
+    ul.innerHTML = "";
+    if (!r.files.length) ul.innerHTML = '<li class="hint">No drawings yet - convert an image and save it.</li>';
+    for (const f of r.files) {
+      const li = document.createElement("li");
+      li.innerHTML = '<span class="name"></span><span class="size"></span>' +
+        '<button class="small" data-a="view">Preview</button><button class="small primary" data-a="plot">Plot</button>' +
+        '<button class="small" data-a="del" title="Delete">✕</button>';
+      li.querySelector(".name").textContent = f.name;
+      li.querySelector(".size").textContent = fmtBytes(f.size);
+      li.querySelector('[data-a="plot"]').onclick = () => plot(f.name);
+      li.querySelector('[data-a="view"]').onclick = async () => {
+        const text = await fetch("/api/file?name=" + encodeURIComponent(f.name)).then((x) => x.text());
+        source = { kind: "lines", name: f.name };
+        updateOptionPanels();
+        setLines(f.name.endsWith(".json") ? JSON.parse(text) : L.parseLinesText(text));
+        $("name").value = f.name.replace(/\.(lines|json)$/, "");
+        say($("msg"), "Showing " + f.name + " from the plotter");
+      };
+      li.querySelector('[data-a="del"]').onclick = async () => {
+        if (!confirm("Delete " + f.name + "?")) return;
+        try { await api("delete?name=" + encodeURIComponent(f.name)); refreshFiles(); }
+        catch (e) { say($("pmsg"), e.message, "err"); }
+      };
+      ul.appendChild(li);
+    }
+    $("fs").textContent = fmtBytes(r.fs.free) + " free of " + fmtBytes(r.fs.total) + " flash";
+  } catch (e) {
+    ul.innerHTML = '<li class="hint">Plotter not reachable.</li>';
+  }
+}
+
+// ------------------------------------------------------------- status polling
+let pollTimer = null;
+async function poll() {
+  clearTimeout(pollTimer);
+  try {
+    status = await fetch("/api/status").then((r) => r.json());
+    const chip = $("chip");
+    if (status.error) { chip.textContent = "error"; chip.className = "chip err"; }
+    else if (status.busy) { chip.textContent = "busy"; chip.className = "chip busy"; }
+    else { chip.textContent = status.virtual ? "virtual" : "ready"; chip.className = "chip"; }
+    $("where").textContent = location.host;
+    $("job").textContent = status.busy ? status.job : (status.last_job || "Idle");
+    $("stop").disabled = !status.busy;
+    const pct = status.total ? status.done / status.total * 100 : 0;
+    $("bar").style.width = (status.busy ? pct : status.total && status.done === status.total ? 100 : 0) + "%";
+    $("progress").textContent = status.total ? status.done + " / " + status.total + " lines (" + Math.floor(pct) + "%)" : "";
+    if (status.error) say($("pmsg"), status.error, "err");
+    $("p_wait").placeholder = status.wait; $("p_res").placeholder = status.resolution; $("p_step").placeholder = status.angular_step;
+    $("kv").innerHTML = "";
+    const kv = [["pen", status.pen], ["x / y", status.x + " / " + status.y + " cm"],
+      ["angles", status.angles.join("° / ") + "°"], ["pulse-widths", status.pws.join(" / ") + " µs"],
+      ["bounds", status.bounds.join(", ")]];
+    if (status.mem_free != null) kv.push(["free RAM", fmtBytes(status.mem_free)]);
+    for (const [k, v] of kv) { const a = document.createElement("span"); a.textContent = k; const b = document.createElement("b"); b.textContent = v; $("kv").append(a, b); }
+    if (!poll.seen) { poll.seen = true; draw(); }
+    pollTimer = setTimeout(poll, status.busy ? 1000 : 4000);
+  } catch (e) {
+    $("chip").textContent = "offline"; $("chip").className = "chip off";
+    pollTimer = setTimeout(poll, 5000);
+  }
+}
+
+draw();
+poll();
+refreshFiles();
+</script>
+</body>
+</html>
